@@ -1,7 +1,6 @@
 import unittest
-from interpreter import Interpreter
-from lexer import Lexer, LexicalError
-from parser import Parser
+from interpreter import (
+    Interpreter, Lexer, LexicalError, Parser)
 
 
 class TestInterpreter(unittest.TestCase):

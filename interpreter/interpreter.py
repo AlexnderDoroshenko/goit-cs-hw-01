@@ -2,11 +2,6 @@
 
 
 class TokenType:
-    """
-    Додайте нові типи токенів для операцій множення MUL,
-    ділення DIV та дужок, які відкривають LPAREN
-    та закривають RPAREN частину арифметичного виразу.
-    """
     INTEGER = "INTEGER"
     MUL = "MULTIPLY"
     DIV = "DIVIDE"
@@ -14,7 +9,7 @@ class TokenType:
     MINUS = "MINUS"
     LPAREN = "("
     RPAREN = ")"
-    EOF = "EOF"  # Означає кінець вхідного рядка
+    EOF = "EOF"  # Кінець вхідного рядка
 
 
 class Token:
@@ -30,16 +25,7 @@ class LexicalError(Exception):
     pass
 
 
-class SyntaxError(Exception):
-    pass
-
-
 class Lexer:
-    """
-    Модифікуйте метод get_next_token класу Lexer так,
-    щоб він розпізнавав ці нові символи.
-    """
-
     def __init__(self, text):
         self.text = text
         self.pos = 0
@@ -54,12 +40,12 @@ class Lexer:
             self.current_char = self.text[self.pos]
 
     def skip_whitespace(self):
-        """Пропускаємо пробільні символи."""
+        """Пропускаємо пробільні символи"""
         while self.current_char is not None and self.current_char.isspace():
             self.advance()
 
     def integer(self):
-        """Повертаємо ціле число, зібране з послідовності цифр."""
+        """Повертаємо ціле число з послідовності цифр"""
         result = ""
         while self.current_char is not None and self.current_char.isdigit():
             result += self.current_char
@@ -67,7 +53,7 @@ class Lexer:
         return int(result)
 
     def get_next_token(self):
-        """Лексичний аналізатор, що розбиває вхідний рядок на токени."""
+        """Лексичний аналізатор, що розбиває вхідний рядок на токени"""
         while self.current_char is not None:
             if self.current_char.isspace():
                 self.skip_whitespace()
@@ -135,71 +121,49 @@ class Parser:
         raise ParsingError("Помилка синтаксичного аналізу")
 
     def eat(self, token_type):
-        """
-        Порівнюємо поточний токен з очікуваним токеном і, якщо вони збігаються,
-        'поглинаємо' його і переходимо до наступного токена.
-        """
+        """Поглинаємо поточний токен та переходимо до наступного"""
         if self.current_token.type == token_type:
             self.current_token = self.lexer.get_next_token()
         else:
-            print(f"Cur tok type: {
-                self.current_token.type}, tok type: {token_type}")
             self.error()
 
-    def term(self):
-        """
-        Парсер для 'term' правил граматики. У нашому випадку - це цілі числа.
-        """
+    def factor(self):
+        """Обробка факторів (числа або вирази в дужках)"""
         token = self.current_token
-        self.eat(TokenType.INTEGER)
-        return Num(token)
+        if token.type == TokenType.INTEGER:
+            self.eat(TokenType.INTEGER)
+            return Num(token)
+        elif token.type == TokenType.LPAREN:
+            self.eat(TokenType.LPAREN)
+            node = self.expr()  # Рекурсивний виклик для виразів в дужках
+            self.eat(TokenType.RPAREN)
+            return node
+        raise ParsingError(f"Невідомий тип токена: {token.type}")
 
-    def expr(self):
-        """Парсер для арифметичних виразів."""
+    def term(self):
+        """Парсинг термів: множення та ділення мають вищий пріоритет"""
         node = self.factor()
-        exp_token_types = (
-            TokenType.PLUS, TokenType.MINUS,
-            TokenType.MUL, TokenType.DIV,
-        )
-        while self.current_token.type in exp_token_types:
+        while self.current_token.type in (TokenType.MUL, TokenType.DIV):
             token = self.current_token
-            if token.type == TokenType.PLUS:
-                self.eat(TokenType.PLUS)
-            elif token.type == TokenType.MINUS:
-                self.eat(TokenType.MINUS)
-            elif token.type == TokenType.MUL:
+            if token.type == TokenType.MUL:
                 self.eat(TokenType.MUL)
             elif token.type == TokenType.DIV:
                 self.eat(TokenType.DIV)
             node = BinOp(left=node, op=token, right=self.factor())
         return node
 
-    def factor(self):
-        """Метод для обробки чисел та виразів у дужках"""
-        token = self.current_token
-        if token.type == TokenType.INTEGER:
-            return self.term()
-        elif token.type == TokenType.LPAREN:
-            self.eat(TokenType.LPAREN)
-            node = self.expr()
-            self.eat(TokenType.RPAREN)
-            return node
-        raise ParsingError(f"Unknown Token type {token.type}")
-
-
-def print_ast(node, level=0):
-    indent = "  " * level
-    if isinstance(node, Num):
-        print(f"{indent}Num({node.value})")
-    elif isinstance(node, BinOp):
-        print(f"{indent}BinOp:")
-        print(f"{indent}  left: ")
-        print_ast(node.left, level + 2)
-        print(f"{indent}  op: {node.op.type}")
-        print(f"{indent}  right: ")
-        print_ast(node.right, level + 2)
-    else:
-        print(f"{indent}Unknown node type: {type(node)}")
+    def expr(self):
+        """Парсинг виразів: додавання та віднімання"""
+        node = self.term()  # Спочатку парсимо терміни (множення та ділення)
+        while self.current_token.type in (TokenType.PLUS, TokenType.MINUS):
+            token = self.current_token
+            if token.type == TokenType.PLUS:
+                self.eat(TokenType.PLUS)
+            elif token.type == TokenType.MINUS:
+                self.eat(TokenType.MINUS)
+            # Потім додаємо/віднімаємо
+            node = BinOp(left=node, op=token, right=self.term())
+        return node
 
 
 class InterpreterError(Exception):
@@ -211,6 +175,7 @@ class Interpreter:
         self.parser = parser
 
     def visit_BinOp(self, node):
+        """Обробка операцій для вузлів BinOp (додавання, віднімання, множення, ділення)"""
         if node.op.type == TokenType.PLUS:
             return self.visit(node.left) + self.visit(node.right)
         elif node.op.type == TokenType.MINUS:
@@ -218,17 +183,21 @@ class Interpreter:
         elif node.op.type == TokenType.MUL:
             return self.visit(node.left) * self.visit(node.right)
         elif node.op.type == TokenType.DIV:
-            return self.visit(node.left) / self.visit(node.right)
-        raise InterpreterError(f"Unknown operation type '{node.op.type}'")
+            right_value = self.visit(node.right)
+            if right_value == 0:
+                raise InterpreterError("Помилка: ділення на нуль")
+            return self.visit(node.left) / right_value
+        raise InterpreterError(f"Невідома операція: {node.op.type}")
 
     def visit_Num(self, node):
         return node.value
 
     def interpret(self):
-        tree = self.parser.expr()
+        tree = self.parser.expr()  # Починаємо з парсингу виразу
         return self.visit(tree)
 
     def visit(self, node):
+        """Метод для динамічного виклику відповідних функцій обробки вузлів AST"""
         method_name = "visit_" + type(node).__name__
         visitor = getattr(self, method_name, self.generic_visit)
         return visitor(node)
